@@ -19,6 +19,12 @@ permissions:
   id-token: write
   contents: read
 
+# Queue runs per environment instead of running them in parallel or cancelling
+# one mid-apply (a cancelled apply leaves a stale Terraform state lock).
+concurrency:
+  group: terraform-${{ github.event.inputs.environment || 'dev' }}
+  cancel-in-progress: false
+
 jobs:
   deploy:
     name: Deploy to ${{ github.event.inputs.environment || 'dev' }}

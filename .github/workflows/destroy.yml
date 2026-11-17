@@ -19,6 +19,10 @@ permissions:
   id-token: write
   contents: read
 
+concurrency:
+  group: terraform-${{ github.event.inputs.environment }}
+  cancel-in-progress: false
+
 jobs:
   destroy:
     name: Destroy ${{ github.event.inputs.environment }}
