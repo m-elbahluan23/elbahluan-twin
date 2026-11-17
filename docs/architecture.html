@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Twin Deployment Architecture</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --surface: #ffffff;
+    --text: #1d2330;
+    --muted: #5d6677;
+    --border: #d9dde5;
+    --accent: #2f5fd0;
+    --aws: #c26a00;
+    --aws-bg: #fff6ea;
+    --ext: #6b4fbb;
+    --ext-bg: #f3effc;
+    --ok: #1f7a4d;
+    --ok-bg: #e9f6ef;
+    --node: #f0f3f9;
+    --line: #7a8496;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12151b;
+      --surface: #1a1f28;
+      --text: #e6e9ef;
+      --muted: #9aa3b3;
+      --border: #2e3542;
+      --accent: #7ea2ff;
+      --aws: #ffb052;
+      --aws-bg: #2a2114;
+      --ext: #b49dff;
+      --ext-bg: #231d36;
+      --ok: #5fd39a;
+      --ok-bg: #15281f;
+      --node: #222936;
+      --line: #8b95a8;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12151b;
+    --surface: #1a1f28;
+    --text: #e6e9ef;
+    --muted: #9aa3b3;
+    --border: #2e3542;
+    --accent: #7ea2ff;
+    --aws: #ffb052;
+    --aws-bg: #2a2114;
+    --ext: #b49dff;
+    --ext-bg: #231d36;
+    --ok: #5fd39a;
+    --ok-bg: #15281f;
+    --node: #222936;
+    --line: #8b95a8;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 1.9rem; margin: 0 0 4px; letter-spacing: -0.01em; }
+  h2 { font-size: 1.25rem; margin: 40px 0 6px; }
+  .lede { color: var(--muted); margin: 0 0 8px; max-width: 70ch; }
+  .sub { color: var(--muted); margin: 0 0 16px; max-width: 75ch; }
+  code {
+    font: 0.86em ui-monospace, SFMono-Regular, Consolas, monospace;
+    background: var(--node);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0 4px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+
+  /* ---------- pipeline ---------- */
+  .pipeline {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    counter-reset: step;
+  }
+  .pipeline li {
+    counter-increment: step;
+    background: var(--node);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 14px 12px;
+    position: relative;
+  }
+  .pipeline li::before {
+    content: counter(step);
+    display: inline-grid;
+    place-items: center;
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--surface);
+    font-weight: 700;
+    font-size: 0.8rem;
+    margin-bottom: 6px;
+  }
+  .pipeline b { display: block; margin-bottom: 2px; }
+  .pipeline span { color: var(--muted); font-size: 0.88rem; }
+  .pipeline .where {
+    display: inline-block;
+    margin-top: 8px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .note {
+    margin-top: 14px;
+    padding: 10px 14px;
+    border-left: 3px solid var(--accent);
+    background: var(--node);
+    border-radius: 0 8px 8px 0;
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+
+  /* ---------- diagram ---------- */
+  .diagram-wrap { overflow-x: auto; }
+  svg.diagram { display: block; width: 100%; min-width: 680px; height: auto; }
+  svg .node { fill: var(--node); stroke: var(--border); stroke-width: 1.2; }
+  svg .node-aws { fill: var(--aws-bg); stroke: var(--aws); stroke-width: 1.2; }
+  svg .node-ext { fill: var(--ext-bg); stroke: var(--ext); stroke-width: 1.2; stroke-dasharray: 5 4; }
+  svg .boundary { fill: none; stroke: var(--aws); stroke-width: 1.2; stroke-dasharray: 6 5; }
+  svg .title { fill: var(--text); font: 600 14px system-ui, sans-serif; }
+  svg .meta { fill: var(--muted); font: 11.5px system-ui, sans-serif; }
+  svg .lbl { fill: var(--muted); font: 11px system-ui, sans-serif; }
+  svg .zone { fill: var(--aws); font: 600 11.5px system-ui, sans-serif; }
+  svg .edge { stroke: var(--line); stroke-width: 1.5; fill: none; }
+  svg .arrowhead { fill: var(--line); }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 12px; font-size: 0.85rem; color: var(--muted); }
+  .legend i { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: -2px; margin-right: 6px; }
+  .legend .l-aws { background: var(--aws-bg); border: 1.2px solid var(--aws); }
+  .legend .l-ext { background: var(--ext-bg); border: 1.2px dashed var(--ext); }
+  .legend .l-node { background: var(--node); border: 1.2px solid var(--border); }
+
+  /* ---------- grids & tables ---------- */
+  .grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .grid3 .card h3 { margin: 0 0 4px; font-size: 1rem; }
+  .grid3 .card p { margin: 0; color: var(--muted); font-size: 0.9rem; }
+  .pill {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: var(--ok-bg);
+    color: var(--ok);
+    margin-left: 6px;
+    vertical-align: 2px;
+  }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  footer { margin-top: 40px; color: var(--muted); font-size: 0.82rem; }
+</style>
+</head>
+<body>
+<main>
+
+  <h1>Deployment architecture</h1>
+  <p class="lede">How the AI Digital Twin goes from a <code>git push</code> to a live site, and how a chat message flows once it's running. Everything lives in one AWS account in <b>eu-north-1</b>, defined in Terraform and deployed by GitHub Actions.</p>
+
+  <!-- ===================== 1. PIPELINE ===================== -->
+  <h2>1 · What happens on deploy</h2>
+  <p class="sub">Triggered by a push to <code>main</code> (deploys <b>dev</b>) or by running the workflow manually and choosing <b>dev</b>, <b>test</b> or <b>prod</b>. Steps run in <code>.github/workflows/deploy.yml</code> → <code>scripts/deploy.sh</code>.</p>
+
+  <div class="card">
+    <ol class="pipeline">
+      <li>
+        <b>Push to main</b>
+        <span>Or a manual run with an environment chosen. Runs for the same environment queue instead of overlapping.</span>
+        <div class="where">GitHub</div>
+      </li>
+      <li>
+        <b>Log in to AWS via OIDC</b>
+        <span>Actions assumes the role <code>github-actions-twin-deploy</code>. No AWS keys are stored in GitHub.</span>
+        <div class="where">GitHub → IAM</div>
+      </li>
+      <li>
+        <b>Build the Lambda zip</b>
+        <span><code>uv run deploy.py</code> packages the FastAPI backend into <code>lambda-deployment.zip</code>.</span>
+        <div class="where">Runner</div>
+      </li>
+      <li>
+        <b>terraform init</b>
+        <span>Connects to the state bucket and lock table, then selects the workspace for the environment.</span>
+        <div class="where">S3 + DynamoDB</div>
+      </li>
+      <li>
+        <b>terraform apply</b>
+        <span>Creates or updates about 20 resources: S3, IAM, Lambda, logs, API Gateway, CloudFront.</span>
+        <div class="where">AWS</div>
+      </li>
+      <li>
+        <b>Build &amp; upload frontend</b>
+        <span>The API URL is written into <code>.env.production</code>, then <code>npm run build</code> and <code>aws s3 sync</code>.</span>
+        <div class="where">Runner → S3</div>
+      </li>
+      <li>
+        <b>Invalidate CloudFront</b>
+        <span>Clears the <code>/*</code> cache so visitors get the new files right away.</span>
+        <div class="where">CloudFront</div>
+      </li>
+    </ol>
+    <div class="note">The OpenAI key comes from the GitHub secret <code>OPENAI_API_KEY</code>. Terraform receives it as <code>TF_VAR_openai_api_key</code> and passes it to the Lambda as an environment variable.</div>
+  </div>
+
+  <!-- ===================== 2. RUNTIME ===================== -->
+  <h2>2 · How a request flows at runtime</h2>
+  <p class="sub">The browser loads the static site from CloudFront and sends chat messages directly to API Gateway. Only the Lambda talks to OpenAI.</p>
+
+  <div class="card">
+    <div class="diagram-wrap">
+      <svg class="diagram" viewBox="0 0 900 530" role="img" aria-labelledby="rt-title rt-desc">
+        <title id="rt-title">Runtime architecture</title>
+        <desc id="rt-desc">The browser loads the site from CloudFront, which reads the S3 frontend bucket. Chat messages go to API Gateway, then Lambda. Lambda calls OpenAI, stores conversations in the S3 memory bucket, and writes logs to CloudWatch.</desc>
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+          </marker>
+        </defs>
+
+        <!-- AWS boundary -->
+        <rect class="boundary" x="190" y="28" width="696" height="388" rx="14"/>
+        <text class="zone" x="206" y="50">AWS account · eu-north-1  (CloudFront runs globally at edge locations)</text>
+
+        <!-- Browser -->
+        <rect class="node" x="16" y="190" width="146" height="66" rx="10"/>
+        <text class="title" x="89" y="219" text-anchor="middle">Browser</text>
+        <text class="meta" x="89" y="238" text-anchor="middle">Next.js static app</text>
+
+        <!-- CloudFront -->
+        <rect class="node-aws" x="226" y="72" width="180" height="66" rx="10"/>
+        <text class="title" x="316" y="101" text-anchor="middle">CloudFront</text>
+        <text class="meta" x="316" y="120" text-anchor="middle">HTTPS · CDN cache</text>
+
+        <!-- S3 frontend -->
+        <rect class="node-aws" x="476" y="72" width="190" height="66" rx="10"/>
+        <text class="title" x="571" y="101" text-anchor="middle">S3 · frontend</text>
+        <text class="meta" x="571" y="120" text-anchor="middle">public website bucket</text>
+
+        <!-- API Gateway -->
+        <rect class="node-aws" x="226" y="300" width="180" height="66" rx="10"/>
+        <text class="title" x="316" y="329" text-anchor="middle">API Gateway</text>
+        <text class="meta" x="316" y="348" text-anchor="middle">HTTP API · rate-limited</text>
+
+        <!-- Lambda -->
+        <rect class="node-aws" x="476" y="300" width="190" height="66" rx="10"/>
+        <text class="title" x="571" y="329" text-anchor="middle">Lambda</text>
+        <text class="meta" x="571" y="348" text-anchor="middle">FastAPI · Python 3.12</text>
+
+        <!-- CloudWatch -->
+        <rect class="node-aws" x="712" y="186" width="160" height="66" rx="10"/>
+        <text class="title" x="792" y="215" text-anchor="middle">CloudWatch Logs</text>
+        <text class="meta" x="792" y="234" text-anchor="middle">kept 14 days</text>
+
+        <!-- S3 memory -->
+        <rect class="node-aws" x="712" y="300" width="160" height="66" rx="10"/>
+        <text class="title" x="792" y="329" text-anchor="middle">S3 · memory</text>
+        <text class="meta" x="792" y="348" text-anchor="middle">private · chat history</text>
+
+        <!-- OpenAI (external) -->
+        <rect class="node-ext" x="476" y="446" width="190" height="66" rx="10"/>
+        <text class="title" x="571" y="475" text-anchor="middle">OpenAI API</text>
+        <text class="meta" x="571" y="494" text-anchor="middle">gpt-4o-mini · outside AWS</text>
+
+        <!-- Edges -->
+        <path class="edge" d="M162,210 C196,210 196,105 224,105" marker-end="url(#arr)"/>
+        <text class="lbl" x="170" y="150">loads site</text>
+
+        <path class="edge" d="M162,236 C196,236 196,333 224,333" marker-end="url(#arr)"/>
+        <text class="lbl" x="170" y="296">POST /chat</text>
+
+        <path class="edge" d="M406,105 L474,105" marker-end="url(#arr)"/>
+        <text class="lbl" x="440" y="96" text-anchor="middle">HTTP</text>
+
+        <path class="edge" d="M406,333 L474,333" marker-end="url(#arr)"/>
+        <text class="lbl" x="440" y="324" text-anchor="middle">proxy</text>
+
+        <path class="edge" d="M666,333 L710,333" marker-end="url(#arr)"/>
+        <text class="lbl" x="688" y="324" text-anchor="middle">R/W</text>
+
+        <path class="edge" d="M640,300 L640,219 L710,219" marker-end="url(#arr)"/>
+        <text class="lbl" x="646" y="262">logs</text>
+
+        <path class="edge" d="M571,366 L571,444" marker-end="url(#arr)"/>
+        <text class="lbl" x="580" y="410">HTTPS + API key</text>
+      </svg>
+    </div>
+    <div class="legend">
+      <span><i class="l-aws"></i>Managed by Terraform (per environment)</span>
+      <span><i class="l-ext"></i>External service</span>
+      <span><i class="l-node"></i>Client</span>
+    </div>
+  </div>
+
+  <!-- ===================== 3. ENVIRONMENTS ===================== -->
+  <h2>3 · Environments</h2>
+  <p class="sub">The same Terraform code deploys each environment. A Terraform workspace keeps each one's state separate, and the <code>twin-&lt;env&gt;-…</code> prefix keeps resource names from colliding.</p>
+  <div class="grid3">
+    <div class="card">
+      <h3>dev <span class="pill">auto on push</span></h3>
+      <p>Deployed on every push to <code>main</code>. Resources are named like <code>twin-dev-api</code>.</p>
+    </div>
+    <div class="card">
+      <h3>test</h3>
+      <p>Manual run of <i>Deploy Digital Twin</i> with <code>test</code> selected.</p>
+    </div>
+    <div class="card">
+      <h3>prod</h3>
+      <p>Manual run. Also applies <code>prod.tfvars</code> if it exists, e.g. for a custom domain via Route53 and ACM.</p>
+    </div>
+  </div>
+
+  <!-- ===================== 4. BOOTSTRAP ===================== -->
+  <h2>4 · One-time setup (not in this Terraform)</h2>
+  <p class="sub">Created once before the first deploy and shared by all environments. Destroying an environment leaves these in place.</p>
+  <div class="card table-wrap">
+    <table>
+      <thead><tr><th>Resource</th><th>Purpose</th><th>Cost</th></tr></thead>
+      <tbody>
+        <tr><td><code>twin-terraform-state-&lt;account&gt;</code> (S3)</td><td>Stores Terraform state for each environment. Versioned, encrypted, private.</td><td>≈ $0</td></tr>
+        <tr><td><code>twin-terraform-locks</code> (DynamoDB)</td><td>Locks the state while a deploy runs. On-demand billing.</td><td>≈ $0</td></tr>
+        <tr><td>GitHub OIDC provider</td><td>Lets GitHub Actions sign in to AWS without stored keys.</td><td>Free</td></tr>
+        <tr><td><code>github-actions-twin-deploy</code> (IAM role)</td><td>The role CI assumes. Its permissions are listed below.</td><td>Free</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ===================== 5. PERMISSIONS ===================== -->
+  <h2>5 · Permissions the deploy role needs</h2>
+  <p class="sub">If one is missing, the deploy fails with <code>AccessDeniedException</code> on the matching resource.</p>
+  <div class="card table-wrap">
+    <table>
+      <thead><tr><th>Service</th><th>Used for</th><th>Granted by</th></tr></thead>
+      <tbody>
+        <tr><td>S3</td><td>Buckets, frontend upload, Terraform state</td><td><code>AmazonS3FullAccess</code></td></tr>
+        <tr><td>DynamoDB</td><td>State lock</td><td><code>AmazonDynamoDBFullAccess</code></td></tr>
+        <tr><td>Lambda</td><td>Function, invoke permission</td><td><code>AWSLambda_FullAccess</code></td></tr>
+        <tr><td>API Gateway</td><td>HTTP API, stage, routes</td><td><code>AmazonAPIGatewayAdministrator</code></td></tr>
+        <tr><td>CloudFront</td><td>Distribution, cache invalidation</td><td><code>CloudFrontFullAccess</code></td></tr>
+        <tr><td>CloudWatch Logs</td><td>Log groups named <code>/aws/lambda/twin-*</code> only</td><td>Inline <code>ManageTwinLambdaLogGroups</code></td></tr>
+        <tr><td>IAM</td><td>The Lambda's role and policy attachments, PassRole</td><td>Inline <code>github-actions-additional</code></td></tr>
+        <tr><td>Route53 / ACM</td><td>Custom domain only (currently off)</td><td><code>AmazonRoute53FullAccess</code>, <code>AWSCertificateManagerFullAccess</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ===================== 6. COST ===================== -->
+  <h2>6 · What it costs</h2>
+  <div class="grid3">
+    <div class="card">
+      <h3>While running</h3>
+      <p>Lambda, API Gateway and CloudFront are pay-per-use and stay within the free tier for personal traffic. The main cost is OpenAI usage, which OpenAI bills directly.</p>
+    </div>
+    <div class="card">
+      <h3>After destroy</h3>
+      <p>Only the one-time setup resources remain, at well under $0.01 a month. Log groups are deleted along with the environment.</p>
+    </div>
+    <div class="card">
+      <h3>Custom domain (off)</h3>
+      <p>If enabled, the Route53 hosted zone costs $0.50 a month, plus yearly domain registration. The ACM certificate is free.</p>
+    </div>
+  </div>
+
+  <footer>Source: <code>terraform/*.tf</code>, <code>scripts/deploy.sh</code>, <code>.github/workflows/deploy.yml</code>.</footer>
+</main>
+</body>
+</html>

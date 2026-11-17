@@ -8,6 +8,8 @@ The whole stack is serverless on AWS, defined in Terraform, and deployed by GitH
 
 ## Architecture
 
+For a visual walkthrough of the deploy pipeline, request flow, environments, permissions and costs, open [docs/architecture.html](docs/architecture.html) in a browser.
+
 ```
 Browser ──► CloudFront ──► S3 (Next.js static site)
    │
