@@ -4,6 +4,8 @@ An LLM-powered "digital twin" that answers recruiter and client questions about 
 
 The whole stack is serverless on AWS, defined in Terraform, and deployed by GitHub Actions.
 
+![AI Digital Twin chat interface](docs/screenshot.png)
+
 ## Architecture
 
 ```
