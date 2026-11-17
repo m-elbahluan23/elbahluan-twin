@@ -8,14 +8,32 @@ The whole stack is serverless on AWS, defined in Terraform, and deployed by GitH
 
 ## Architecture
 
-For a visual walkthrough of the deploy pipeline, request flow, environments, permissions and costs, open [docs/architecture.html](docs/architecture.html) in a browser.
+### How a request flows
 
-```
-Browser ──► CloudFront ──► S3 (Next.js static site)
-   │
-   └────► API Gateway (HTTP API, rate-limited) ──► Lambda (FastAPI + Mangum) ──► OpenAI
-                                                      │
-                                                      └──► S3 (per-session conversation memory)
+The browser loads the static site from CloudFront and sends chat messages straight to API Gateway. Only the Lambda talks to OpenAI.
+
+```mermaid
+flowchart LR
+    U["🌐 Browser<br/>Next.js app"]
+
+    subgraph AWS["AWS account · eu-north-1"]
+        CF["CloudFront<br/>HTTPS · CDN cache"]
+        S3F["S3 · frontend<br/>public website"]
+        APIGW["API Gateway<br/>HTTP API · rate-limited"]
+        L["Lambda<br/>FastAPI · Python 3.12"]
+        S3M["S3 · memory<br/>private chat history"]
+        CW["CloudWatch Logs<br/>kept 14 days"]
+    end
+
+    OAI["OpenAI API<br/>gpt-4o-mini"]
+
+    U -- "loads site" --> CF
+    CF -- "HTTP" --> S3F
+    U -- "POST /chat" --> APIGW
+    APIGW -- "proxy" --> L
+    L -- "read / write" --> S3M
+    L -- "logs" --> CW
+    L -- "HTTPS + API key" --> OAI
 ```
 
 | Layer          | Technology                                                       |
@@ -81,6 +99,16 @@ The frontend calls `NEXT_PUBLIC_API_URL` and falls back to `http://localhost:800
 4. Create GitHub environments named `dev`, `test` and `prod`. You can add required reviewers to `prod` so its deploys need approval.
 
 ### CI/CD
+
+```mermaid
+flowchart LR
+    A["git push to main<br/>or manual run"] --> B["GitHub Actions<br/>OIDC login to AWS<br/>(no stored keys)"]
+    B --> C["Build Lambda zip<br/>uv run deploy.py"]
+    C --> D["terraform init<br/>S3 state + DynamoDB lock"]
+    D --> E["terraform apply<br/>~20 resources"]
+    E --> F["Build Next.js<br/>aws s3 sync"]
+    F --> G["Invalidate<br/>CloudFront cache"]
+```
 
 - **Deploy:** every push to `main` deploys to `dev`. To deploy to `test` or `prod`, run the **Deploy Digital Twin** workflow manually from the Actions tab and pick the environment. The workflow builds the Lambda package, applies Terraform, builds the frontend, uploads it to S3 and invalidates the CloudFront cache.
 - **Destroy:** run the **Destroy Environment** workflow manually. You must type the environment name to confirm.
