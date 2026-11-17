@@ -51,6 +51,18 @@ resource "aws_lambda_function" "api" {
     }
   }
 
-  # Ensure Lambda waits for the distribution to exist
-  depends_on = [aws_cloudfront_distribution.main]
+  # Wait for the distribution, and for the log group so Lambda doesn't
+  # auto-create an unmanaged one on first invoke.
+  depends_on = [
+    aws_cloudfront_distribution.main,
+    aws_cloudwatch_log_group.lambda,
+  ]
+}
+
+# Log group managed by Terraform so it has a retention period and is
+# removed on destroy (Lambda's auto-created groups are kept forever).
+resource "aws_cloudwatch_log_group" "lambda" {
+  name              = "/aws/lambda/${local.name_prefix}-api"
+  retention_in_days = var.log_retention_days
+  tags              = local.common_tags
 }

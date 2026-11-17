@@ -25,6 +25,12 @@ variable "lambda_timeout" {
   default     = 60
 }
 
+variable "log_retention_days" {
+  description = "Days to keep Lambda logs in CloudWatch"
+  type        = number
+  default     = 14
+}
+
 variable "openai_api_key" {
   description = "OpenAI API key (set via TF_VAR_openai_api_key, never commit it)"
   type        = string
