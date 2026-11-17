@@ -39,6 +39,21 @@ if (-not $env:TF_VAR_openai_api_key) {
 # Navigate to terraform directory
 Set-Location (Join-Path $Root "terraform")
 
+# Get AWS Account ID for backend configuration and bucket names
+$awsAccountId = aws sts get-caller-identity --query Account --output text
+Assert-LastExit "aws sts get-caller-identity"
+$awsRegion = if ($env:DEFAULT_AWS_REGION) { $env:DEFAULT_AWS_REGION } else { "us-east-1" }
+
+# Initialize terraform with S3 backend
+Write-Host "Initializing Terraform with S3 backend..." -ForegroundColor Yellow
+terraform init -input=false `
+  -backend-config="bucket=twin-terraform-state-$awsAccountId" `
+  -backend-config="key=$Environment/terraform.tfstate" `
+  -backend-config="region=$awsRegion" `
+  -backend-config="dynamodb_table=twin-terraform-locks" `
+  -backend-config="encrypt=true"
+Assert-LastExit "terraform init"
+
 # Check if workspace exists (exact match, not substring)
 $workspaces = terraform workspace list | ForEach-Object { $_.Trim().TrimStart('*').Trim() }
 if ($workspaces -notcontains $Environment) {
@@ -53,10 +68,6 @@ terraform workspace select $Environment
 Assert-LastExit "terraform workspace select"
 
 Write-Host "Emptying S3 buckets..." -ForegroundColor Yellow
-
-# Get AWS Account ID for bucket names
-$awsAccountId = aws sts get-caller-identity --query Account --output text
-Assert-LastExit "aws sts get-caller-identity"
 
 # Define bucket names with account ID
 $Buckets = @(
