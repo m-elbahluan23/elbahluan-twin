@@ -3,6 +3,10 @@ name: Deploy Digital Twin
 on:
   push:
     branches: [main]
+    # Docs-only pushes don't change the app, so they shouldn't redeploy dev.
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
   workflow_dispatch:
     inputs:
       environment:
