@@ -53,6 +53,17 @@ backend/            FastAPI app, Lambda handler and packaging script
   deploy.py         Builds lambda-deployment.zip inside the official Lambda Docker image
 frontend/           Next.js chat UI (components/twin.tsx)
 terraform/          All AWS infrastructure; one workspace per environment
+  terraform.tf      Terraform and AWS provider versions
+  providers.tf      AWS provider (main region + us-east-1 alias for the certificate)
+  backend.tf        Remote state in S3 (values passed by the deploy scripts)
+  variables.tf      Inputs; defaults in terraform.tfvars
+  locals.tf         Shared name prefix and tags
+  s3.tf             Memory bucket (private) and frontend bucket (public website)
+  lambda.tf         Lambda function, its IAM role and its CloudWatch log group
+  api_gateway.tf    HTTP API, routes and rate limits
+  cloudfront.tf     CDN serving the frontend over HTTPS
+  domain.tf         Optional custom domain (Route 53 + ACM), off by default
+  outputs.tf        URLs and bucket names used by the deploy scripts
 scripts/            deploy / destroy scripts (.sh for Linux/CI, .ps1 for Windows)
 .github/workflows/  deploy.yml and destroy.yml
 ```
@@ -86,7 +97,20 @@ The frontend calls `NEXT_PUBLIC_API_URL` and falls back to `http://localhost:800
 ### One-time setup
 
 1. Create the Terraform state backend in your region: an S3 bucket named `twin-terraform-state-<ACCOUNT_ID>` and a DynamoDB table named `twin-terraform-locks` with partition key `LockID` (String).
-2. Create an IAM role that GitHub Actions can assume through OIDC (trusting `token.actions.githubusercontent.com` for this repo) and that has permission to manage the resources above.
+2. Create an IAM role that GitHub Actions can assume through OIDC (trusting `token.actions.githubusercontent.com` for this repo). It needs permission to manage everything Terraform creates:
+
+   | Service         | Used for                                     | Policy                                                      |
+   | --------------- | -------------------------------------------- | ----------------------------------------------------------- |
+   | S3              | Buckets, frontend upload, Terraform state    | `AmazonS3FullAccess`                                        |
+   | DynamoDB        | State lock                                   | `AmazonDynamoDBFullAccess`                                  |
+   | Lambda          | Function and invoke permission               | `AWSLambda_FullAccess`                                      |
+   | API Gateway     | HTTP API, stage and routes                   | `AmazonAPIGatewayAdministrator`                             |
+   | CloudFront      | Distribution and cache invalidation          | `CloudFrontFullAccess`                                      |
+   | CloudWatch Logs | Log groups named `/aws/lambda/twin-*`        | Inline: `logs:CreateLogGroup`, `DeleteLogGroup`, `PutRetentionPolicy`, `DescribeLogGroups`, tagging |
+   | IAM             | The Lambda's role, policy attachments, `iam:PassRole` | Inline: `iam:CreateRole`, `AttachRolePolicy`, `PassRole`, etc. |
+   | Route 53 / ACM  | Custom domain only                           | `AmazonRoute53FullAccess`, `AWSCertificateManagerFullAccess` |
+
+   If one is missing, the deploy fails with `AccessDeniedException` on that resource. Each Terraform file's header comment lists the permissions it needs.
 3. In GitHub, go to **Settings → Secrets and variables → Actions** and add these secrets:
 
    | Secret               | Value                                        |
