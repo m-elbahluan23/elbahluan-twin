@@ -35,6 +35,13 @@ if [ -z "${TF_VAR_openai_api_key:-}" ]; then
   exit 1
 fi
 
+# main.tf hashes the Lambda zip, and Terraform evaluates that even on destroy.
+# The zip is a build artifact (not in git), so create a placeholder if missing.
+if [ ! -f backend/lambda-deployment.zip ]; then
+  echo "Creating placeholder Lambda package for destroy..."
+  python3 -c "import zipfile; zipfile.ZipFile('backend/lambda-deployment.zip','w').writestr('placeholder.txt','')"
+fi
+
 cd "$ROOT/terraform"
 
 AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID:-$(aws sts get-caller-identity --query Account --output text)}

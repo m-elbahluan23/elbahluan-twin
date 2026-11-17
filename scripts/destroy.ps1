@@ -36,6 +36,16 @@ if (-not $env:TF_VAR_openai_api_key) {
     throw "OpenAI API key not found. Set `$env:TF_VAR_openai_api_key or OPENAI_API_KEY in backend/.env"
 }
 
+# main.tf hashes the Lambda zip, and Terraform evaluates that even on destroy.
+# The zip is a build artifact (not in git), so create a placeholder if missing.
+$zipPath = Join-Path $Root "backend\lambda-deployment.zip"
+if (-not (Test-Path $zipPath)) {
+    Write-Host "Creating placeholder Lambda package for destroy..." -ForegroundColor Gray
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zip = [System.IO.Compression.ZipFile]::Open($zipPath, 'Create')
+    $zip.Dispose()
+}
+
 # Navigate to terraform directory
 Set-Location (Join-Path $Root "terraform")
 
