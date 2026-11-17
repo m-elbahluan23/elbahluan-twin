@@ -1,0 +1,26 @@
+{
+  "full_name": "Mohamed Ahmed Abdelmaguid",
+  "name": "Mohamed",
+  "current_role": "Senior Machine Learning Engineer",
+  "location": "Cairo, Egypt",
+  "email": "m.elbahluan23@gmail.com",
+  "linkedin": "",
+  "specialties": [
+    "AI agents and LLM applications",
+    "RAG assistants, chatbots, and semantic search",
+    "Recommendation, pricing, and user segmentation"
+  ],
+  "years_experience": 5,
+  "education": [
+    {
+      "degree": "Post-graduate Diploma in Artificial Intelligence",
+      "institution": "Information Technology Institute (ITI)",
+      "year": "2022"
+    },
+    {
+      "degree": "Bachelor in Mechatronics Engineering",
+      "institution": "Arab Academy for Science and Technology",
+      "year": "2020"
+    }
+  ]
+}
