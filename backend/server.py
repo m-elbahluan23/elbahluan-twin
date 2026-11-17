@@ -28,7 +28,9 @@ app.add_middleware(
 )
 
 # Initialize OpenAI client (reads OPENAI_API_KEY from the environment)
-openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# .strip(): a stray newline in the key (e.g. from a pasted secret) breaks the
+# Authorization header and surfaces as a misleading "Connection error".
+openai_client = OpenAI(api_key=(os.getenv("OPENAI_API_KEY") or "").strip() or None)
 
 # OpenAI model selection
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
