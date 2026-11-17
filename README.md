@@ -125,13 +125,21 @@ The frontend calls `NEXT_PUBLIC_API_URL` and falls back to `http://localhost:800
 ### CI/CD
 
 ```mermaid
-flowchart LR
-    A["git push to main<br/>or manual run"] --> B["GitHub Actions<br/>OIDC login to AWS<br/>(no stored keys)"]
-    B --> C["Build Lambda zip<br/>uv run deploy.py"]
-    C --> D["terraform init<br/>S3 state + DynamoDB lock"]
-    D --> E["terraform apply<br/>~20 resources"]
-    E --> F["Build Next.js<br/>aws s3 sync"]
-    F --> G["Invalidate<br/>CloudFront cache"]
+flowchart TB
+    subgraph S1["1 · Trigger and build"]
+        direction LR
+        A["git push to main<br/>or manual run"] --> B["OIDC login to AWS<br/>no stored keys"]
+        B --> C["Build Lambda zip<br/>uv run deploy.py"]
+    end
+
+    subgraph S2["2 · Infrastructure and release"]
+        direction LR
+        D["terraform init<br/>S3 state + lock"] --> E["terraform apply<br/>~20 resources"]
+        E --> F["Build Next.js<br/>s3 sync"]
+        F --> G["Invalidate<br/>CloudFront"]
+    end
+
+    S1 --> S2
 ```
 
 - **Deploy:** every push to `main` deploys to `dev`. To deploy to `test` or `prod`, run the **Deploy Digital Twin** workflow manually from the Actions tab and pick the environment. The workflow builds the Lambda package, applies Terraform, builds the frontend, uploads it to S3 and invalidates the CloudFront cache.
